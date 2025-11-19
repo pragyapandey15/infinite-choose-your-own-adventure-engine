@@ -174,6 +174,17 @@ const App: React.FC = () => {
   const handleCraft = (recipe: CraftingRecipe) => {
     const newInventory = [...gameState.inventory];
     
+    // Transactional check before mutation to be extra safe
+    const canAfford = recipe.ingredients.every(ing => {
+      const count = newInventory.filter(i => i.name.toLowerCase() === ing.name.toLowerCase()).length;
+      return count >= ing.count;
+    });
+
+    if (!canAfford) {
+      console.error("Crafting failed: Insufficient ingredients");
+      return;
+    }
+
     // Remove ingredients
     for (const ing of recipe.ingredients) {
       let removedCount = 0;
@@ -185,19 +196,21 @@ const App: React.FC = () => {
           removedCount++;
         }
       }
-      if (removedCount < ing.count) {
-        console.error("Failed to craft: missing ingredients", ing.name);
-        return; // Should rely on UI validation primarily
-      }
     }
 
-    // Add result
-    newInventory.push(recipe.result);
+    // Add result with unique ID
+    const craftedItem = { 
+      ...recipe.result, 
+      id: `crafted-${Date.now()}-${Math.random().toString(36).substr(2, 9)}` 
+    };
+    newInventory.push(craftedItem);
 
-    setGameState({
-      ...gameState,
-      inventory: newInventory
-    });
+    setGameState(prev => ({
+      ...prev,
+      inventory: newInventory,
+      // Add to history so AI knows context for next turn
+      history: [...prev.history, `Crafted ${recipe.result.name}`]
+    }));
   };
 
   const handleEquip = (item: InventoryItem) => {
