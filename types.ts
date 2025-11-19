@@ -1,7 +1,24 @@
+
+export type ItemType = 'weapon' | 'armor' | 'consumable' | 'material' | 'misc';
+
+export interface ItemStats {
+  attack?: number;
+  defense?: number;
+  restore?: number; // For potions
+}
+
 export interface InventoryItem {
+  id?: string; // Optional for backward compatibility, but new items get it
   name: string;
   description: string;
-  icon: string; // Simple emoji or string identifier
+  icon: string; 
+  type?: ItemType;
+  stats?: ItemStats;
+}
+
+export interface Equipment {
+  mainHand: InventoryItem | null;
+  armor: InventoryItem | null;
 }
 
 export interface WorldLocation {
@@ -13,16 +30,34 @@ export interface WorldLocation {
   isUnlocked: boolean;
 }
 
+export interface LoreEntry {
+  id: string;
+  category: 'Character' | 'Faction' | 'Location' | 'History' | 'Bestiary' | 'Concept';
+  name: string;
+  description: string;
+  icon?: string;
+  unlockedAtTurn?: number;
+}
+
+export interface CombatLogEntry {
+  turn: number;
+  text: string;
+  type: 'player' | 'enemy' | 'info' | 'damage';
+}
+
 export interface CombatState {
   isActive: boolean;
   enemyName: string;
   enemyHealth: number;
   maxHealth: number;
   description: string;
+  lastAction?: string;
+  log: CombatLogEntry[];
 }
 
 export interface GameState {
   inventory: InventoryItem[];
+  equipment: Equipment; // New field
   currentQuest: string;
   history: string[]; // Summary of previous events for context
   turnCount: number;
@@ -34,6 +69,7 @@ export interface GameState {
   locations: WorldLocation[];
   currentLocationId: string;
   combat: CombatState | null;
+  lore: LoreEntry[];
 }
 
 export interface StorySegment {
@@ -64,10 +100,21 @@ export interface StorySegment {
   combatUpdate?: {
     newEnemyHealth: number;
     status: 'ongoing' | 'victory' | 'defeat' | 'fled';
+    enemyAction?: string;
   };
+  // Lore updates
+  newLore?: LoreEntry[];
 }
 
 export interface ChatMessage {
   role: 'user' | 'model';
   text: string;
+}
+
+export interface CraftingRecipe {
+  id: string;
+  name: string;
+  description: string;
+  result: InventoryItem;
+  ingredients: { name: string; count: number }[];
 }

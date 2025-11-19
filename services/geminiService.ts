@@ -1,3 +1,4 @@
+
 import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { StorySegment, GameState } from "../types";
 import { SYSTEM_INSTRUCTION, ART_STYLE } from "../constants";
@@ -23,20 +24,35 @@ export const generateStory = async (
     .map(l => `${l.name} (x:${l.x}, y:${l.y})${l.id === currentState.currentLocationId ? " [CURRENT]" : ""}`)
     .join(", ");
 
+  // Create a summary of discovered lore for context
+  const loreContext = currentState.lore ? currentState.lore.map(l => l.name).join(", ") : "None";
+
+  // Stats calculation
+  const mainHandAtk = currentState.equipment?.mainHand?.stats?.attack || 0;
+  const armorDef = currentState.equipment?.armor?.stats?.defense || 0;
+  const totalAttack = mainHandAtk; // Can add base attack later
+  const totalDefense = armorDef;
+
   let combatContext = "None";
   if (currentState.combat && currentState.combat.isActive) {
     combatContext = `ACTIVE COMBAT vs ${currentState.combat.enemyName} (HP: ${currentState.combat.enemyHealth}/${currentState.combat.maxHealth})`;
+    if (currentState.combat.lastAction) {
+      combatContext += `\n    - Last Enemy Move: "${currentState.combat.lastAction}" (Consider this for cooldowns/patterns)`;
+    }
   }
 
   const context = `
     Current Game State:
     - Quest: ${currentState.currentQuest}
     - Inventory: ${currentState.inventory.map(i => i.name).join(', ')}
+    - EQUIPPED GEAR: Main Hand: ${currentState.equipment?.mainHand?.name || "None"} (Atk: ${mainHandAtk}), Armor: ${currentState.equipment?.armor?.name || "None"} (Def: ${armorDef})
+    - TOTAL STATS: Attack: ${totalAttack}, Defense: ${totalDefense}
     - Health: ${currentState.health}
     - Gold: ${currentState.gold}
     - Character: ${currentState.characterName} (${currentState.characterClass})
     - Appearance Description: ${currentState.appearance}
     - Known Locations: ${locationContext || "None yet"}
+    - Known Lore: ${loreContext}
     - COMBAT STATUS: ${combatContext}
     
     Previous Story Context (Summary):
@@ -79,7 +95,17 @@ export const generateStory = async (
                 properties: {
                   name: { type: Type.STRING },
                   description: { type: Type.STRING },
-                  icon: { type: Type.STRING, description: "A single emoji representing the item" }
+                  icon: { type: Type.STRING, description: "A single emoji representing the item" },
+                  type: { type: Type.STRING, enum: ['weapon', 'armor', 'consumable', 'material', 'misc'] },
+                  stats: {
+                    type: Type.OBJECT,
+                    properties: {
+                      attack: { type: Type.INTEGER },
+                      defense: { type: Type.INTEGER },
+                      restore: { type: Type.INTEGER }
+                    },
+                    nullable: true
+                  }
                 }
               }
             },
@@ -111,10 +137,25 @@ export const generateStory = async (
               description: "Return this to update an active combat encounter.",
               properties: {
                 newEnemyHealth: { type: Type.INTEGER },
+                enemyAction: { type: Type.STRING, description: "The specific move or ability the enemy used this turn." },
                 status: { 
                   type: Type.STRING, 
                   enum: ['ongoing', 'victory', 'defeat', 'fled'] 
                 }
+              }
+            },
+            newLore: {
+              type: Type.ARRAY,
+              description: "List of new lore entries discovered in this scene.",
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  category: { type: Type.STRING, enum: ['Character', 'Faction', 'Location', 'History', 'Bestiary', 'Concept'] },
+                  description: { type: Type.STRING, description: "Short concise description of the lore entry." },
+                  icon: { type: Type.STRING, description: "An optional emoji" }
+                },
+                required: ["name", "category", "description"]
               }
             }
           },

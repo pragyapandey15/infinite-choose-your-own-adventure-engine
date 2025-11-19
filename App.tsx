@@ -1,5 +1,6 @@
+
 import React, { useState } from 'react';
-import { GameState, StorySegment, WorldLocation } from './types';
+import { GameState, StorySegment, WorldLocation, LoreEntry, CombatLogEntry, CraftingRecipe, InventoryItem, Equipment } from './types';
 import { INITIAL_QUEST, CLASS_LOADOUTS } from './constants';
 import { generateStory, generateSceneImage } from './services/geminiService';
 import { audioManager } from './services/audioService';
@@ -9,6 +10,8 @@ import ActionArea from './components/ActionArea';
 import ChatWidget from './components/ChatWidget';
 import CharacterCreation from './components/CharacterCreation';
 import WorldMap from './components/WorldMap';
+import Encyclopedia from './components/Encyclopedia';
+import CraftingModal from './components/CraftingModal';
 import { Menu } from 'lucide-react';
 
 type GamePhase = 'creation' | 'playing';
@@ -19,9 +22,9 @@ const App: React.FC = () => {
   const [gamePhase, setGamePhase] = useState<GamePhase>('creation');
   
   // App State
-  // Initial state is placeholder until character creation
   const [gameState, setGameState] = useState<GameState>({
     inventory: [],
+    equipment: { mainHand: null, armor: null },
     currentQuest: INITIAL_QUEST,
     history: [],
     turnCount: 1,
@@ -32,7 +35,8 @@ const App: React.FC = () => {
     gold: 10,
     locations: [],
     currentLocationId: 'start',
-    combat: null
+    combat: null,
+    lore: []
   });
 
   const [currentSegment, setCurrentSegment] = useState<StorySegment | null>(null);
@@ -40,13 +44,23 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isMapOpen, setIsMapOpen] = useState(false);
+  const [isLoreOpen, setIsLoreOpen] = useState(false);
+  const [isCraftingOpen, setIsCraftingOpen] = useState(false);
 
   // Persistence Logic
-  const saveGame = (): boolean => {
+  const saveGame = (
+    stateOverride?: GameState,
+    segmentOverride?: StorySegment | null,
+    imageOverride?: string | null
+  ): boolean => {
+    const state = stateOverride || gameState;
+    const segment = segmentOverride !== undefined ? segmentOverride : currentSegment;
+    const image = imageOverride !== undefined ? imageOverride : currentImage;
+
     const saveData = {
-      gameState,
-      currentSegment,
-      currentImage,
+      gameState: state,
+      currentSegment: segment,
+      currentImage: image,
       timestamp: Date.now()
     };
     try {
@@ -63,7 +77,12 @@ const App: React.FC = () => {
     if (saved) {
       try {
         const data = JSON.parse(saved);
-        setGameState(data.gameState);
+        // Ensure compatibility with older saves
+        const loadedState = data.gameState;
+        if (!loadedState.lore) loadedState.lore = [];
+        if (!loadedState.equipment) loadedState.equipment = { mainHand: null, armor: null };
+        
+        setGameState(loadedState);
         setCurrentSegment(data.currentSegment);
         setCurrentImage(data.currentImage);
         setGamePhase('playing');
@@ -94,8 +113,19 @@ const App: React.FC = () => {
       isUnlocked: true
     };
 
+    // Auto-equip logic for starters
+    const starterWeapon = loadout.inventory.find(i => i.type === 'weapon') || null;
+    const starterArmor = loadout.inventory.find(i => i.type === 'armor') || null;
+    
+    // Filter out equipped items from initial inventory
+    const initialInventory = loadout.inventory.filter(i => i !== starterWeapon && i !== starterArmor);
+
     const initialState: GameState = {
-      inventory: loadout.inventory,
+      inventory: initialInventory,
+      equipment: {
+        mainHand: starterWeapon || null,
+        armor: starterArmor || null
+      },
       currentQuest: INITIAL_QUEST,
       history: [],
       turnCount: 1,
@@ -106,7 +136,8 @@ const App: React.FC = () => {
       gold: loadout.gold,
       locations: [initialLocation],
       currentLocationId: initialLocation.id,
-      combat: null
+      combat: null,
+      lore: []
     };
 
     setGameState(initialState);
@@ -140,6 +171,80 @@ const App: React.FC = () => {
     }
   };
 
+  const handleCraft = (recipe: CraftingRecipe) => {
+    const newInventory = [...gameState.inventory];
+    
+    // Remove ingredients
+    for (const ing of recipe.ingredients) {
+      let removedCount = 0;
+      // iterate backward to safely splice
+      for (let i = newInventory.length - 1; i >= 0; i--) {
+        if (removedCount >= ing.count) break;
+        if (newInventory[i].name.toLowerCase() === ing.name.toLowerCase()) {
+          newInventory.splice(i, 1);
+          removedCount++;
+        }
+      }
+      if (removedCount < ing.count) {
+        console.error("Failed to craft: missing ingredients", ing.name);
+        return; // Should rely on UI validation primarily
+      }
+    }
+
+    // Add result
+    newInventory.push(recipe.result);
+
+    setGameState({
+      ...gameState,
+      inventory: newInventory
+    });
+  };
+
+  const handleEquip = (item: InventoryItem) => {
+    audioManager.playEquip();
+    const slot = item.type === 'weapon' ? 'mainHand' : item.type === 'armor' ? 'armor' : null;
+    if (!slot) return;
+
+    const newEquipment = { ...gameState.equipment };
+    const newInventory = [...gameState.inventory];
+
+    // If slot occupied, unequip current item first
+    if (newEquipment[slot]) {
+      newInventory.push(newEquipment[slot]!);
+    }
+
+    // Remove new item from inventory
+    const itemIndex = newInventory.indexOf(item); // Using reference equality since we map directly
+    if (itemIndex > -1) {
+      newInventory.splice(itemIndex, 1);
+    }
+
+    // Equip new item
+    newEquipment[slot] = item;
+
+    setGameState({
+      ...gameState,
+      inventory: newInventory,
+      equipment: newEquipment
+    });
+  };
+
+  const handleUnequip = (slot: 'mainHand' | 'armor') => {
+     const item = gameState.equipment[slot];
+     if (!item) return;
+     
+     const newEquipment = { ...gameState.equipment };
+     newEquipment[slot] = null;
+     
+     const newInventory = [...gameState.inventory, item];
+     
+     setGameState({
+       ...gameState,
+       equipment: newEquipment,
+       inventory: newInventory
+     });
+  };
+
   // Action Handler
   const handleAction = async (action: string) => {
     if (!currentSegment || isLoading) return;
@@ -150,6 +255,8 @@ const App: React.FC = () => {
     setIsLoading(true);
     setCurrentImage(null); // Clear old image while loading new one
     if (isMapOpen) setIsMapOpen(false); // Close map if traveling
+    if (isLoreOpen) setIsLoreOpen(false);
+    if (isCraftingOpen) setIsCraftingOpen(false);
 
     try {
       // Update history buffer
@@ -176,6 +283,8 @@ const App: React.FC = () => {
       if (newSegment.newInventoryItems) {
         newSegment.newInventoryItems.forEach(item => {
           if (!newInventory.some(i => i.name === item.name)) {
+            // Assign ID if missing (simple timestamp for now)
+            if(!item.id) item.id = `item-${Date.now()}-${Math.random()}`;
             newInventory.push(item);
           }
         });
@@ -217,8 +326,24 @@ const App: React.FC = () => {
             if (target) newLocationId = target.id;
       }
 
+      // Lore Updates
+      const currentLore = [...(gameState.lore || [])];
+      if (newSegment.newLore && newSegment.newLore.length > 0) {
+        newSegment.newLore.forEach(item => {
+          // Prevent duplicates based on name
+          if (!currentLore.some(l => l.name.toLowerCase() === item.name.toLowerCase())) {
+            currentLore.push({
+              ...item,
+              id: `lore-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+              unlockedAtTurn: gameState.turnCount + 1
+            });
+          }
+        });
+      }
+
       // COMBAT LOGIC
       let currentCombat = gameState.combat;
+      let combatEnded = false;
 
       // Start Combat?
       if (newSegment.startCombat) {
@@ -227,38 +352,67 @@ const App: React.FC = () => {
           enemyName: newSegment.startCombat.enemyName,
           enemyHealth: newSegment.startCombat.health,
           maxHealth: newSegment.startCombat.health,
-          description: newSegment.startCombat.description
+          description: newSegment.startCombat.description,
+          lastAction: "Enters the fray!",
+          log: [{ turn: gameState.turnCount + 1, text: `Encounter started vs ${newSegment.startCombat.enemyName}`, type: 'info' }]
         };
         // Force battle music if not already set by AI
         if (!newSegment.soundEnvironment) audioManager.setAmbience('battle');
       } 
       // Update Combat?
       else if (newSegment.combatUpdate && currentCombat && currentCombat.isActive) {
+        // Calculate estimated damage for logs
+        const enemyDamage = Math.max(0, currentCombat.enemyHealth - newSegment.combatUpdate.newEnemyHealth);
+        const playerDamage = newSegment.healthChange || 0;
+        
+        const newLogs: CombatLogEntry[] = [
+          ...(currentCombat.log || []),
+          { turn: gameState.turnCount + 1, text: `> ${action}`, type: 'player' },
+          { turn: gameState.turnCount + 1, text: `${newSegment.combatUpdate.enemyAction || 'Acts...'}`, type: 'enemy' }
+        ];
+
+        if (enemyDamage > 0) {
+           newLogs.push({ turn: gameState.turnCount + 1, text: `${currentCombat.enemyName} took ${enemyDamage} damage.`, type: 'damage' });
+        }
+        if (playerDamage < 0) {
+           newLogs.push({ turn: gameState.turnCount + 1, text: `You took ${Math.abs(playerDamage)} damage.`, type: 'damage' });
+        }
+
         if (newSegment.combatUpdate.status === 'ongoing') {
           currentCombat = {
             ...currentCombat,
-            enemyHealth: newSegment.combatUpdate.newEnemyHealth
+            enemyHealth: newSegment.combatUpdate.newEnemyHealth,
+            lastAction: newSegment.combatUpdate.enemyAction || "Attacks!",
+            log: newLogs
           };
         } else {
           // Victory, Defeat, or Fled - End Combat
           currentCombat = null;
+          combatEnded = true;
         }
       }
 
-      setGameState(prev => ({
-        ...prev,
+      const nextGameState: GameState = {
+        ...gameState,
         inventory: newInventory,
-        currentQuest: newSegment.updatedQuest || prev.currentQuest,
+        currentQuest: newSegment.updatedQuest || gameState.currentQuest,
         history: updatedHistory,
-        turnCount: prev.turnCount + 1,
-        health: Math.min(100, Math.max(0, prev.health + (newSegment.healthChange || 0))),
-        gold: Math.max(0, prev.gold + (newSegment.goldChange || 0)),
+        turnCount: gameState.turnCount + 1,
+        health: Math.min(100, Math.max(0, gameState.health + (newSegment.healthChange || 0))),
+        gold: Math.max(0, gameState.gold + (newSegment.goldChange || 0)),
         locations: newLocations,
         currentLocationId: newLocationId,
-        combat: currentCombat
-      }));
+        combat: currentCombat,
+        lore: currentLore
+      };
 
+      setGameState(nextGameState);
       setCurrentSegment(newSegment);
+
+      // Auto-save on combat completion
+      if (combatEnded) {
+        saveGame(nextGameState, newSegment, null);
+      }
 
       // 3. Generate Image
       const imageUrl = await generateSceneImage(newSegment.imagePrompt);
@@ -330,9 +484,13 @@ const App: React.FC = () => {
       `}>
         <Sidebar 
           gameState={gameState} 
-          onSave={saveGame} 
+          onSave={() => saveGame()} 
           onLoad={loadGame} 
           onToggleMap={() => setIsMapOpen(true)}
+          onToggleLore={() => setIsLoreOpen(true)}
+          onToggleCrafting={() => setIsCraftingOpen(true)}
+          onEquip={handleEquip}
+          onUnequip={handleUnequip}
         />
       </div>
 
@@ -350,6 +508,23 @@ const App: React.FC = () => {
           gameState={gameState} 
           onClose={() => setIsMapOpen(false)} 
           onTravel={handleTravel}
+        />
+      )}
+
+      {/* Lore Encyclopedia Modal */}
+      {isLoreOpen && (
+        <Encyclopedia 
+          gameState={gameState} 
+          onClose={() => setIsLoreOpen(false)} 
+        />
+      )}
+
+      {/* Crafting Modal */}
+      {isCraftingOpen && (
+        <CraftingModal 
+          gameState={gameState}
+          onClose={() => setIsCraftingOpen(false)}
+          onCraft={handleCraft}
         />
       )}
 

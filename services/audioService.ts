@@ -1,3 +1,4 @@
+
 class AudioService {
   private context: AudioContext | null = null;
   private masterGain: GainNode | null = null;
@@ -97,6 +98,68 @@ class AudioService {
     
     osc.start(now);
     osc.stop(now + 0.4);
+  }
+
+  public playCraft() {
+    if (this.isMuted || !this.context) return;
+    const now = this.context.currentTime;
+    
+    // Metallic strike (FM Synthesis)
+    const osc1 = this.context.createOscillator();
+    const osc2 = this.context.createOscillator();
+    const gain = this.context.createGain();
+    const modGain = this.context.createGain();
+
+    osc1.type = 'sine';
+    osc1.frequency.setValueAtTime(800, now);
+    
+    osc2.type = 'square';
+    osc2.frequency.setValueAtTime(200, now); // Modulator frequency
+    
+    modGain.gain.setValueAtTime(1000, now);
+    modGain.gain.exponentialRampToValueAtTime(1, now + 0.3);
+
+    osc2.connect(modGain);
+    modGain.connect(osc1.frequency);
+    
+    osc1.connect(gain);
+    gain.connect(this.masterGain!);
+
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+    osc1.start(now);
+    osc2.start(now);
+    osc1.stop(now + 0.5);
+    osc2.stop(now + 0.5);
+  }
+
+  public playEquip() {
+    if (this.isMuted || !this.context) return;
+    const now = this.context.currentTime;
+    // Leather/Cloth shuffle sound
+    const bufferSize = this.context.sampleRate * 0.3;
+    const buffer = this.context.createBuffer(1, bufferSize, this.context.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1);
+    }
+    const noise = this.context.createBufferSource();
+    noise.buffer = buffer;
+    
+    const filter = this.context.createBiquadFilter();
+    filter.type = 'lowpass';
+    filter.frequency.setValueAtTime(400, now);
+    filter.frequency.linearRampToValueAtTime(100, now + 0.3);
+
+    const gain = this.context.createGain();
+    gain.gain.setValueAtTime(0.2, now);
+    gain.gain.linearRampToValueAtTime(0, now + 0.3);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(this.masterGain!);
+    noise.start(now);
   }
 
   public playTransition() {
