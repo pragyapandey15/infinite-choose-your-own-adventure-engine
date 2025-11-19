@@ -1,0 +1,5 @@
+{
+  "name": "Infinite Realms",
+  "description": "An infinite choose-your-own-adventure engine where your choices matter. Features real-time image generation and automatic inventory/quest tracking.",
+  "requestFramePermissions": []
+}
