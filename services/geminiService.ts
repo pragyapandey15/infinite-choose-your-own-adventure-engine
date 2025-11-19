@@ -1,4 +1,4 @@
-import { GoogleGenAI, Type } from "@google/genai";
+import { GoogleGenAI, Type, Modality } from "@google/genai";
 import { StorySegment, GameState } from "../types";
 import { SYSTEM_INSTRUCTION, ART_STYLE } from "../constants";
 
@@ -141,8 +141,10 @@ export const generateStory = async (
 };
 
 export const generateSceneImage = async (prompt: string): Promise<string | null> => {
+  const enhancedPrompt = `${prompt}. Art Style: ${ART_STYLE}`;
+
+  // Attempt 1: Imagen 3 (High Quality)
   try {
-    const enhancedPrompt = `${prompt}. Art Style: ${ART_STYLE}`;
     const response = await ai.models.generateImages({
       model: 'imagen-4.0-generate-001',
       prompt: enhancedPrompt,
@@ -157,11 +159,32 @@ export const generateSceneImage = async (prompt: string): Promise<string | null>
     if (imageBytes) {
         return `data:image/jpeg;base64,${imageBytes}`;
     }
-    return null;
   } catch (error) {
-    console.error("Error generating image:", error);
-    return null;
+    console.warn("Imagen 3 quota exceeded or failed, switching to fallback model...", error);
   }
+
+  // Attempt 2: Gemini Flash Image (Fallback)
+  try {
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: {
+        parts: [{ text: enhancedPrompt }],
+      },
+      config: {
+        responseModalities: [Modality.IMAGE],
+      },
+    });
+
+    const part = response.candidates?.[0]?.content?.parts?.[0];
+    if (part?.inlineData?.data) {
+      const mimeType = part.inlineData.mimeType || 'image/jpeg';
+      return `data:${mimeType};base64,${part.inlineData.data}`;
+    }
+  } catch (error) {
+    console.error("All image generation attempts failed:", error);
+  }
+
+  return null;
 };
 
 export const chatWithGuide = async (
