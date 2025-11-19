@@ -13,6 +13,14 @@ export interface WorldLocation {
   isUnlocked: boolean;
 }
 
+export interface CombatState {
+  isActive: boolean;
+  enemyName: string;
+  enemyHealth: number;
+  maxHealth: number;
+  description: string;
+}
+
 export interface GameState {
   inventory: InventoryItem[];
   currentQuest: string;
@@ -25,6 +33,7 @@ export interface GameState {
   gold: number;
   locations: WorldLocation[];
   currentLocationId: string;
+  combat: CombatState | null;
 }
 
 export interface StorySegment {
@@ -45,6 +54,16 @@ export interface StorySegment {
     description: string;
     x: number;
     y: number;
+  };
+  // Combat updates
+  startCombat?: {
+    enemyName: string;
+    health: number;
+    description: string;
+  };
+  combatUpdate?: {
+    newEnemyHealth: number;
+    status: 'ongoing' | 'victory' | 'defeat' | 'fled';
   };
 }
 

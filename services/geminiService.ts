@@ -23,6 +23,11 @@ export const generateStory = async (
     .map(l => `${l.name} (x:${l.x}, y:${l.y})${l.id === currentState.currentLocationId ? " [CURRENT]" : ""}`)
     .join(", ");
 
+  let combatContext = "None";
+  if (currentState.combat && currentState.combat.isActive) {
+    combatContext = `ACTIVE COMBAT vs ${currentState.combat.enemyName} (HP: ${currentState.combat.enemyHealth}/${currentState.combat.maxHealth})`;
+  }
+
   const context = `
     Current Game State:
     - Quest: ${currentState.currentQuest}
@@ -32,6 +37,7 @@ export const generateStory = async (
     - Character: ${currentState.characterName} (${currentState.characterClass})
     - Appearance Description: ${currentState.appearance}
     - Known Locations: ${locationContext || "None yet"}
+    - COMBAT STATUS: ${combatContext}
     
     Previous Story Context (Summary):
     ${currentState.history.slice(-3).join('\n')}
@@ -58,7 +64,7 @@ export const generateStory = async (
             choices: { 
               type: Type.ARRAY, 
               items: { type: Type.STRING },
-              description: "3 suggested actions"
+              description: "3 suggested actions. If in combat, include Attack/Defend/Flee options."
             },
             imagePrompt: { type: Type.STRING, description: "Visual description for image generation" },
             soundEnvironment: { 
@@ -79,7 +85,7 @@ export const generateStory = async (
             },
             removedInventoryItems: { type: Type.ARRAY, items: { type: Type.STRING } },
             updatedQuest: { type: Type.STRING },
-            healthChange: { type: Type.INTEGER },
+            healthChange: { type: Type.INTEGER, description: "Negative for damage taken, positive for healing" },
             goldChange: { type: Type.INTEGER },
             newLocation: {
               type: Type.OBJECT,
@@ -89,6 +95,26 @@ export const generateStory = async (
                 description: { type: Type.STRING },
                 x: { type: Type.INTEGER, description: "0-100 X coordinate" },
                 y: { type: Type.INTEGER, description: "0-100 Y coordinate" }
+              }
+            },
+            startCombat: {
+              type: Type.OBJECT,
+              description: "Return this to initiate a combat encounter.",
+              properties: {
+                enemyName: { type: Type.STRING },
+                health: { type: Type.INTEGER },
+                description: { type: Type.STRING }
+              }
+            },
+            combatUpdate: {
+              type: Type.OBJECT,
+              description: "Return this to update an active combat encounter.",
+              properties: {
+                newEnemyHealth: { type: Type.INTEGER },
+                status: { 
+                  type: Type.STRING, 
+                  enum: ['ongoing', 'victory', 'defeat', 'fled'] 
+                }
               }
             }
           },

@@ -13,7 +13,8 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ currentNarrative }) => {
     { role: 'model', text: 'I am the Guide. Ask me anything about your journey.' }
   ]);
   const [input, setInput] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
+  // Track number of pending requests to allow concurrency
+  const [activeRequests, setActiveRequests] = useState(0);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
@@ -22,24 +23,28 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ currentNarrative }) => {
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, isOpen]);
+  }, [messages, isOpen, activeRequests]);
 
   const handleSend = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || isTyping) return;
+    if (!input.trim()) return;
 
     const userMsg = input;
+    // Capture context at the moment of sending
+    const contextNarrative = currentNarrative;
+    
     setInput('');
     setMessages(prev => [...prev, { role: 'user', text: userMsg }]);
-    setIsTyping(true);
+    setActiveRequests(prev => prev + 1);
 
     try {
-      const reply = await chatWithGuide(userMsg, currentNarrative);
+      // Each call maintains its own closure over contextNarrative
+      const reply = await chatWithGuide(userMsg, contextNarrative);
       setMessages(prev => [...prev, { role: 'model', text: reply }]);
     } catch (error) {
       setMessages(prev => [...prev, { role: 'model', text: 'Something went wrong connecting to the ether.' }]);
     } finally {
-      setIsTyping(false);
+      setActiveRequests(prev => Math.max(0, prev - 1));
     }
   };
 
@@ -90,7 +95,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ currentNarrative }) => {
               </div>
             </div>
           ))}
-          {isTyping && (
+          {activeRequests > 0 && (
             <div className="flex justify-start">
               <div className="bg-slate-800 p-3 rounded-2xl rounded-bl-none border border-slate-700 flex gap-1">
                 <div className="w-2 h-2 bg-slate-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -114,7 +119,7 @@ const ChatWidget: React.FC<ChatWidgetProps> = ({ currentNarrative }) => {
             />
             <button
               type="submit"
-              disabled={!input.trim() || isTyping}
+              disabled={!input.trim()}
               className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-indigo-400 hover:text-indigo-300 disabled:opacity-50"
             >
               <Send className="w-4 h-4" />

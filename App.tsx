@@ -31,7 +31,8 @@ const App: React.FC = () => {
     health: 100,
     gold: 10,
     locations: [],
-    currentLocationId: 'start'
+    currentLocationId: 'start',
+    combat: null
   });
 
   const [currentSegment, setCurrentSegment] = useState<StorySegment | null>(null);
@@ -104,7 +105,8 @@ const App: React.FC = () => {
       health: loadout.health,
       gold: loadout.gold,
       locations: [initialLocation],
-      currentLocationId: initialLocation.id
+      currentLocationId: initialLocation.id,
+      combat: null
     };
 
     setGameState(initialState);
@@ -193,9 +195,7 @@ const App: React.FC = () => {
       let newLocations = [...gameState.locations];
       let newLocationId = gameState.currentLocationId;
 
-      // Check if AI discovered a new location
       if (newSegment.newLocation) {
-        // Check if exists
         const exists = newLocations.find(l => l.name === newSegment.newLocation!.name);
         if (!exists) {
           const createdLocation: WorldLocation = {
@@ -211,14 +211,38 @@ const App: React.FC = () => {
         } else {
           newLocationId = exists.id;
         }
-      } else {
-         // If user traveled via map explicitly, we might need to resolve the ID from the name in the action
-         // This is a bit of a heuristic: if action is "Travel to X", find X.
-         if (action.startsWith("Travel to ")) {
+      } else if (action.startsWith("Travel to ")) {
             const targetName = action.replace("Travel to ", "");
             const target = newLocations.find(l => l.name === targetName);
             if (target) newLocationId = target.id;
-         }
+      }
+
+      // COMBAT LOGIC
+      let currentCombat = gameState.combat;
+
+      // Start Combat?
+      if (newSegment.startCombat) {
+        currentCombat = {
+          isActive: true,
+          enemyName: newSegment.startCombat.enemyName,
+          enemyHealth: newSegment.startCombat.health,
+          maxHealth: newSegment.startCombat.health,
+          description: newSegment.startCombat.description
+        };
+        // Force battle music if not already set by AI
+        if (!newSegment.soundEnvironment) audioManager.setAmbience('battle');
+      } 
+      // Update Combat?
+      else if (newSegment.combatUpdate && currentCombat && currentCombat.isActive) {
+        if (newSegment.combatUpdate.status === 'ongoing') {
+          currentCombat = {
+            ...currentCombat,
+            enemyHealth: newSegment.combatUpdate.newEnemyHealth
+          };
+        } else {
+          // Victory, Defeat, or Fled - End Combat
+          currentCombat = null;
+        }
       }
 
       setGameState(prev => ({
@@ -230,7 +254,8 @@ const App: React.FC = () => {
         health: Math.min(100, Math.max(0, prev.health + (newSegment.healthChange || 0))),
         gold: Math.max(0, prev.gold + (newSegment.goldChange || 0)),
         locations: newLocations,
-        currentLocationId: newLocationId
+        currentLocationId: newLocationId,
+        combat: currentCombat
       }));
 
       setCurrentSegment(newSegment);
@@ -275,7 +300,8 @@ const App: React.FC = () => {
                 title={currentSegment.title}
                 narrative={currentSegment.narrative}
                 imageUrl={currentImage}
-                isLoading={isLoading && !currentImage} // Show loading spinner if loading and no image yet (or resetting)
+                isLoading={isLoading && !currentImage}
+                combatState={gameState.combat}
               />
             )}
             

@@ -1,14 +1,17 @@
 import React from 'react';
 import { Sparkles } from 'lucide-react';
+import { CombatState } from '../types';
+import CombatDisplay from './CombatDisplay';
 
 interface StoryCardProps {
   title: string;
   narrative: string;
   imageUrl: string | null;
   isLoading: boolean;
+  combatState: CombatState | null;
 }
 
-const StoryCard: React.FC<StoryCardProps> = ({ title, narrative, imageUrl, isLoading }) => {
+const StoryCard: React.FC<StoryCardProps> = ({ title, narrative, imageUrl, isLoading, combatState }) => {
   return (
     <div className="flex flex-col gap-6 max-w-3xl mx-auto w-full animate-in fade-in duration-700">
       {/* Image Section */}
@@ -23,7 +26,7 @@ const StoryCard: React.FC<StoryCardProps> = ({ title, narrative, imageUrl, isLoa
             <img 
               src={imageUrl} 
               alt="Scene visualization" 
-              className="w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-105"
+              className={`w-full h-full object-cover transition-transform duration-1000 ease-out group-hover:scale-105 ${combatState?.isActive ? 'sepia-[.5] hue-rotate-[-30deg] saturate-150' : ''}`}
             />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-900 via-transparent to-transparent opacity-60" />
           </>
@@ -33,6 +36,11 @@ const StoryCard: React.FC<StoryCardProps> = ({ title, narrative, imageUrl, isLoa
           </div>
         )}
       </div>
+
+      {/* Combat UI Layer */}
+      {combatState && combatState.isActive && (
+        <CombatDisplay combatState={combatState} />
+      )}
 
       {/* Text Section */}
       <div className="space-y-4 px-2 md:px-4">
