@@ -32,6 +32,7 @@ export interface StorySegment {
   narrative: string;
   choices: string[];
   imagePrompt: string;
+  soundEnvironment?: 'nature' | 'dungeon' | 'city' | 'battle' | 'mystic';
   // Updates to state returned by AI
   newInventoryItems?: InventoryItem[];
   removedInventoryItems?: string[];

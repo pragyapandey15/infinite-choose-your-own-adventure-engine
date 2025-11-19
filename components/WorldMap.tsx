@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { GameState } from '../types';
 import { MapPin, Navigation, X, Plus, Minus, Maximize } from 'lucide-react';
+import { audioManager } from '../services/audioService';
 
 interface WorldMapProps {
   gameState: GameState;
@@ -40,12 +41,26 @@ const WorldMap: React.FC<WorldMapProps> = ({ gameState, onClose, onTravel }) => 
     setScale(newScale);
   };
 
-  const zoomIn = () => setScale(prev => Math.min(prev + 0.5, 4));
-  const zoomOut = () => setScale(prev => Math.max(prev - 0.5, 0.5));
+  const zoomIn = () => {
+      audioManager.playClick();
+      setScale(prev => Math.min(prev + 0.5, 4));
+  };
+  
+  const zoomOut = () => {
+      audioManager.playClick();
+      setScale(prev => Math.max(prev - 0.5, 0.5));
+  };
+
   const resetView = () => {
+    audioManager.playClick();
     setScale(1);
     setPosition({ x: 0, y: 0 });
   };
+
+  const handleClose = () => {
+      audioManager.playClick();
+      onClose();
+  }
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-300">
@@ -61,7 +76,7 @@ const WorldMap: React.FC<WorldMapProps> = ({ gameState, onClose, onTravel }) => 
             </span>
           </div>
           <button 
-            onClick={onClose}
+            onClick={handleClose}
             className="p-2 hover:bg-slate-700 rounded-full transition-colors text-slate-400 hover:text-white"
           >
             <X className="w-6 h-6" />
@@ -125,7 +140,10 @@ const WorldMap: React.FC<WorldMapProps> = ({ gameState, onClose, onTravel }) => 
                       <button
                         onClick={(e) => {
                             e.stopPropagation(); // Prevent drag start
-                            if (!isCurrent) onTravel(location.name);
+                            if (!isCurrent) {
+                                audioManager.playClick();
+                                onTravel(location.name);
+                            }
                         }}
                         disabled={isCurrent}
                         className={`

@@ -48,7 +48,7 @@ export const generateStory = async (
       model: model,
       contents: context,
       config: {
-        systemInstruction: SYSTEM_INSTRUCTION,
+        systemInstruction: SYSTEM_INSTRUCTION + `\nAdditionally, for the 'soundEnvironment' field, choose one that best fits the atmosphere: 'nature', 'dungeon', 'city', 'battle', or 'mystic'.`,
         responseMimeType: "application/json",
         responseSchema: {
           type: Type.OBJECT,
@@ -61,6 +61,11 @@ export const generateStory = async (
               description: "3 suggested actions"
             },
             imagePrompt: { type: Type.STRING, description: "Visual description for image generation" },
+            soundEnvironment: { 
+              type: Type.STRING, 
+              enum: ['nature', 'dungeon', 'city', 'battle', 'mystic'],
+              description: "The auditory atmosphere of the scene."
+            },
             newInventoryItems: {
               type: Type.ARRAY,
               items: {
@@ -103,7 +108,8 @@ export const generateStory = async (
       title: "The Void",
       narrative: "A mysterious fog rolls in, obscuring your vision. The world seems to pause as the gods (AI) contemplate your fate. Please try again.",
       choices: ["Wait", "Yell out", "Check surroundings"],
-      imagePrompt: "A thick mysterious fog in a dark void"
+      imagePrompt: "A thick mysterious fog in a dark void",
+      soundEnvironment: 'mystic'
     };
   }
 };

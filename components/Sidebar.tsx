@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GameState } from '../types';
-import { Backpack, Map as MapIcon, Heart, Coins, User, Save, RotateCcw, CheckCircle2 } from 'lucide-react';
+import { Backpack, Map as MapIcon, Heart, Coins, User, Save, RotateCcw, CheckCircle2, Volume2, VolumeX } from 'lucide-react';
+import { audioManager } from '../services/audioService';
 
 interface SidebarProps {
   gameState: GameState;
@@ -11,12 +12,36 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ gameState, onSave, onLoad, onToggleMap }) => {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved'>('idle');
+  const [isMuted, setIsMuted] = useState(false);
+
+  useEffect(() => {
+    setIsMuted(audioManager.getMuteStatus());
+  }, []);
 
   const handleSave = () => {
+    audioManager.playClick();
     if (onSave()) {
+      audioManager.playSuccess();
       setSaveStatus('saved');
       setTimeout(() => setSaveStatus('idle'), 2000);
     }
+  };
+
+  const handleLoad = () => {
+    audioManager.playClick();
+    if(window.confirm('Load last save? Current progress will be lost.')) {
+      onLoad();
+    }
+  };
+
+  const handleToggleMap = () => {
+    audioManager.playClick();
+    onToggleMap();
+  };
+
+  const handleToggleMute = () => {
+    const muted = audioManager.toggleMute();
+    setIsMuted(muted);
   };
 
   return (
@@ -34,6 +59,13 @@ const Sidebar: React.FC<SidebarProps> = ({ gameState, onSave, onLoad, onToggleMa
                 <div className="text-xs text-slate-500 mt-1">{gameState.characterClass}</div>
               </div>
             </div>
+            <button 
+              onClick={handleToggleMute}
+              className="p-1.5 hover:bg-slate-700 rounded-md transition-colors text-slate-500 hover:text-slate-300"
+              title={isMuted ? "Unmute Audio" : "Mute Audio"}
+            >
+              {isMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+            </button>
           </div>
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -55,7 +87,7 @@ const Sidebar: React.FC<SidebarProps> = ({ gameState, onSave, onLoad, onToggleMa
       {/* Actions */}
       <div className="space-y-4">
         <button 
-          onClick={onToggleMap}
+          onClick={handleToggleMap}
           className="w-full flex items-center justify-between bg-indigo-900/20 hover:bg-indigo-900/40 border border-indigo-500/30 hover:border-indigo-500/50 p-4 rounded-lg transition-all group"
         >
           <div className="flex items-center gap-3">
@@ -125,7 +157,7 @@ const Sidebar: React.FC<SidebarProps> = ({ gameState, onSave, onLoad, onToggleMa
           </button>
           
           <button 
-            onClick={() => { if(window.confirm('Load last save? Current progress will be lost.')) onLoad(); }}
+            onClick={handleLoad}
             className="flex-1 flex items-center justify-center gap-2 bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold py-2 px-3 rounded transition-colors border border-slate-700"
           >
             <RotateCcw className="w-3 h-3" />

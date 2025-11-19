@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Send, MousePointerClick } from 'lucide-react';
+import { audioManager } from '../services/audioService';
 
 interface ActionAreaProps {
   choices: string[];
@@ -13,8 +14,16 @@ const ActionArea: React.FC<ActionAreaProps> = ({ choices, onAction, isLoading })
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (customInput.trim() && !isLoading) {
+      audioManager.playClick();
       onAction(customInput);
       setCustomInput('');
+    }
+  };
+
+  const handleChoiceClick = (choice: string) => {
+    if (!isLoading) {
+      audioManager.playClick();
+      onAction(choice);
     }
   };
 
@@ -27,7 +36,8 @@ const ActionArea: React.FC<ActionAreaProps> = ({ choices, onAction, isLoading })
           {choices.map((choice, idx) => (
             <button
               key={idx}
-              onClick={() => !isLoading && onAction(choice)}
+              onClick={() => handleChoiceClick(choice)}
+              onMouseEnter={() => audioManager.playHover()}
               disabled={isLoading}
               className="flex items-center justify-center gap-2 text-sm font-medium p-3 rounded-lg border border-slate-700 bg-slate-800/50 hover:bg-indigo-600 hover:border-indigo-500 text-slate-200 transition-all duration-200 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed text-left md:text-center h-full"
             >

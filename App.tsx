@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { GameState, StorySegment, WorldLocation } from './types';
 import { INITIAL_QUEST, CLASS_LOADOUTS } from './constants';
 import { generateStory, generateSceneImage } from './services/geminiService';
+import { audioManager } from './services/audioService';
 import Sidebar from './components/Sidebar';
 import StoryCard from './components/StoryCard';
 import ActionArea from './components/ActionArea';
@@ -65,6 +66,11 @@ const App: React.FC = () => {
         setCurrentSegment(data.currentSegment);
         setCurrentImage(data.currentImage);
         setGamePhase('playing');
+        // Restore ambience if possible
+        if (data.currentSegment?.soundEnvironment) {
+           audioManager.init();
+           audioManager.setAmbience(data.currentSegment.soundEnvironment);
+        }
         return true;
       } catch (e) {
         console.error("Load failed", e);
@@ -75,6 +81,7 @@ const App: React.FC = () => {
   };
 
   const handleCharacterCreate = async (data: { name: string; class: string; appearance: string }) => {
+    audioManager.init(); // Initialize audio on game start
     const loadout = CLASS_LOADOUTS[data.class];
     
     const initialLocation: WorldLocation = {
@@ -103,6 +110,9 @@ const App: React.FC = () => {
     setGameState(initialState);
     setGamePhase('playing');
     setIsLoading(true);
+    
+    // Start basic ambience while loading
+    audioManager.setAmbience('mystic');
 
     // Construct initial prompt using character details
     const initialPrompt = `Begin the adventure. The character is a ${data.class} named ${data.name}. Appearance: ${data.appearance}. They wake up in a strange fantasy location called "The Awakening Site".`;
@@ -110,6 +120,12 @@ const App: React.FC = () => {
     try {
       const segment = await generateStory("", initialPrompt, initialState);
       setCurrentSegment(segment);
+      
+      if (segment.soundEnvironment) {
+        audioManager.setAmbience(segment.soundEnvironment);
+      } else {
+        audioManager.setAmbience('nature'); // default
+      }
       
       generateSceneImage(segment.imagePrompt).then(url => {
         if (url) setCurrentImage(url);
@@ -125,6 +141,9 @@ const App: React.FC = () => {
   // Action Handler
   const handleAction = async (action: string) => {
     if (!currentSegment || isLoading) return;
+    
+    audioManager.init(); // Ensure audio is ready
+    audioManager.playTransition(); // Play swoosh sound
     
     setIsLoading(true);
     setCurrentImage(null); // Clear old image while loading new one
@@ -143,6 +162,11 @@ const App: React.FC = () => {
       // 1. Get new story segment from Gemini
       const newSegment = await generateStory(currentSegment.narrative, action, tempState);
       
+      // Update audio environment based on new scene
+      if (newSegment.soundEnvironment) {
+        audioManager.setAmbience(newSegment.soundEnvironment);
+      }
+
       // 2. Process State Updates from AI
       const newInventory = [...gameState.inventory];
       
@@ -235,7 +259,7 @@ const App: React.FC = () => {
       
       {/* Mobile Sidebar Toggle */}
       <button 
-        onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+        onClick={() => { audioManager.playClick(); setIsSidebarOpen(!isSidebarOpen); }}
         className="md:hidden fixed top-4 right-4 z-50 p-2 bg-slate-800 rounded-lg border border-slate-700 text-slate-200"
       >
         <Menu className="w-6 h-6" />

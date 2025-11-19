@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { CLASS_LOADOUTS } from '../constants';
 import { ArrowRight, User, RotateCcw } from 'lucide-react';
+import { audioManager } from '../services/audioService';
 
 interface CharacterCreationProps {
   onCreate: (data: { name: string; class: string; appearance: string }) => void;
@@ -14,6 +15,8 @@ const CharacterCreation: React.FC<CharacterCreationProps> = ({ onCreate, onLoad 
   const [hasSave, setHasSave] = useState(false);
 
   useEffect(() => {
+    // Initialize audio on the first screen interaction possibility if needed
+    // But generally we do it on click
     const saved = localStorage.getItem('infinite_realms_save');
     if (saved) setHasSave(true);
   }, []);
@@ -21,12 +24,23 @@ const CharacterCreation: React.FC<CharacterCreationProps> = ({ onCreate, onLoad 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (name.trim() && appearance.trim()) {
+      audioManager.playSuccess();
       onCreate({
         name: name.trim(),
         class: selectedClass,
         appearance: appearance.trim()
       });
     }
+  };
+
+  const handleClassSelect = (className: string) => {
+    audioManager.playClick();
+    setSelectedClass(className);
+  };
+
+  const handleLoad = () => {
+      audioManager.playClick();
+      onLoad();
   };
 
   return (
@@ -81,7 +95,7 @@ const CharacterCreation: React.FC<CharacterCreationProps> = ({ onCreate, onLoad 
                   <button
                     key={className}
                     type="button"
-                    onClick={() => setSelectedClass(className)}
+                    onClick={() => handleClassSelect(className)}
                     className={`relative p-6 rounded-xl border text-left transition-all duration-300 ${
                       isSelected 
                         ? 'bg-indigo-900/30 border-indigo-500 ring-1 ring-indigo-500/50' 
@@ -120,7 +134,7 @@ const CharacterCreation: React.FC<CharacterCreationProps> = ({ onCreate, onLoad 
               <div className="animate-in fade-in slide-in-from-bottom-2">
                 <button
                   type="button"
-                  onClick={() => onLoad()}
+                  onClick={handleLoad}
                   className="text-slate-500 hover:text-indigo-400 text-sm font-medium transition-colors flex items-center justify-center gap-2 py-2"
                 >
                   <RotateCcw className="w-4 h-4" />
