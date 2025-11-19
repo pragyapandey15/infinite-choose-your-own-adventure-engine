@@ -1,7 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { GameState, InventoryItem } from '../types';
-import { Backpack, Map as MapIcon, Heart, Coins, User, Save, RotateCcw, CheckCircle2, Volume2, VolumeX, Book, Hammer, Shield, Sword } from 'lucide-react';
+import { Backpack, Map as MapIcon, Heart, Coins, User, Save, RotateCcw, CheckCircle2, Volume2, VolumeX, Book, Hammer, Shield, Sword, Zap } from 'lucide-react';
 import { audioManager } from '../services/audioService';
 
 interface SidebarProps {
@@ -121,6 +121,24 @@ const Sidebar: React.FC<SidebarProps> = ({ gameState, onSave, onLoad, onToggleMa
             </div>
           </div>
         </div>
+
+        {/* Active Effects */}
+        {gameState.activeEffects && gameState.activeEffects.length > 0 && (
+          <div className="bg-slate-800/30 p-3 rounded-lg border border-slate-700/50 space-y-2">
+             <h4 className="text-[10px] uppercase tracking-wider text-slate-500 font-bold mb-1 flex items-center gap-1">
+               <Zap className="w-3 h-3" /> Active Effects
+             </h4>
+             {gameState.activeEffects.map((effect, idx) => (
+               <div key={idx} className={`flex items-center justify-between text-xs p-1.5 rounded ${effect.type === 'buff' ? 'bg-indigo-900/20 text-indigo-300' : 'bg-rose-900/20 text-rose-300'}`}>
+                 <div className="flex items-center gap-2">
+                   <span>{effect.icon}</span>
+                   <span className="font-medium">{effect.name}</span>
+                 </div>
+                 <span className="font-mono opacity-70">{effect.duration}t</span>
+               </div>
+             ))}
+          </div>
+        )}
       </div>
 
       {/* Equipment Slots */}

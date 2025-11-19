@@ -36,7 +36,8 @@ const App: React.FC = () => {
     locations: [],
     currentLocationId: 'start',
     combat: null,
-    lore: []
+    lore: [],
+    activeEffects: []
   });
 
   const [currentSegment, setCurrentSegment] = useState<StorySegment | null>(null);
@@ -81,6 +82,7 @@ const App: React.FC = () => {
         const loadedState = data.gameState;
         if (!loadedState.lore) loadedState.lore = [];
         if (!loadedState.equipment) loadedState.equipment = { mainHand: null, armor: null };
+        if (!loadedState.activeEffects) loadedState.activeEffects = [];
         
         setGameState(loadedState);
         setCurrentSegment(data.currentSegment);
@@ -137,7 +139,8 @@ const App: React.FC = () => {
       locations: [initialLocation],
       currentLocationId: initialLocation.id,
       combat: null,
-      lore: []
+      lore: [],
+      activeEffects: []
     };
 
     setGameState(initialState);
@@ -354,6 +357,31 @@ const App: React.FC = () => {
         });
       }
 
+      // STATUS EFFECTS MANAGEMENT
+      let currentEffects = [...(gameState.activeEffects || [])];
+      
+      // 1. Decrement duration of existing effects (since they 'ticked' in the AI generation)
+      currentEffects = currentEffects.map(e => ({...e, duration: e.duration - 1})).filter(e => e.duration > 0);
+
+      // 2. Remove specific effects if cured
+      if (newSegment.removedStatusEffects) {
+        const toRemove = new Set(newSegment.removedStatusEffects.map(n => n.toLowerCase()));
+        currentEffects = currentEffects.filter(e => !toRemove.has(e.name.toLowerCase()));
+      }
+
+      // 3. Add new effects
+      if (newSegment.newStatusEffects) {
+         newSegment.newStatusEffects.forEach(effect => {
+            // If effect exists, refresh/overwrite it
+            const existingIdx = currentEffects.findIndex(e => e.name.toLowerCase() === effect.name.toLowerCase());
+            if (existingIdx >= 0) {
+               currentEffects[existingIdx] = { ...effect, id: currentEffects[existingIdx].id || `effect-${Date.now()}` };
+            } else {
+               currentEffects.push({ ...effect, id: `effect-${Date.now()}-${Math.random()}` });
+            }
+         });
+      }
+
       // COMBAT LOGIC
       let currentCombat = gameState.combat;
       let combatEnded = false;
@@ -416,7 +444,8 @@ const App: React.FC = () => {
         locations: newLocations,
         currentLocationId: newLocationId,
         combat: currentCombat,
-        lore: currentLore
+        lore: currentLore,
+        activeEffects: currentEffects
       };
 
       setGameState(nextGameState);

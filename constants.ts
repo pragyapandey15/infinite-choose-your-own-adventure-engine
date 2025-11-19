@@ -59,12 +59,63 @@ export const CRAFTING_RECIPES: CraftingRecipe[] = [
     ]
   },
   {
+    id: 'reinforced-shield',
+    name: 'Reinforced Shield',
+    description: 'A wooden shield reinforced with iron bands.',
+    result: { name: 'Reinforced Shield', description: 'Heavy but offers great protection.', icon: '🛡️', type: 'armor', stats: { defense: 8 } },
+    ingredients: [
+      { name: 'Wood', count: 2 },
+      { name: 'Iron Ore', count: 2 }
+    ]
+  },
+  {
+    id: 'obsidian-dagger',
+    name: 'Obsidian Dagger',
+    description: 'A blade of volcanic glass, incredibly sharp.',
+    result: { name: 'Obsidian Dagger', description: 'Glints with a dark, purple sheen.', icon: '🗡️', type: 'weapon', stats: { attack: 15 } },
+    ingredients: [
+      { name: 'Obsidian Shard', count: 1 },
+      { name: 'Leather Scraps', count: 1 },
+      { name: 'Iron Ore', count: 1 }
+    ]
+  },
+  {
+    id: 'mage-hood',
+    name: 'Mage\'s Hood',
+    description: 'Imbued with residual magic dust.',
+    result: { name: 'Mage Hood', description: 'Weaves protective spells around the wearer.', icon: '🧙‍♀️', type: 'armor', stats: { defense: 5 } },
+    ingredients: [
+      { name: 'Cloth', count: 2 },
+      { name: 'Magic Dust', count: 1 }
+    ]
+  },
+  {
     id: 'health-potion',
     name: 'Health Potion',
     description: 'Restores a small amount of health.',
     result: { name: 'Health Potion', description: 'A red bubbling liquid.', icon: '🧪', type: 'consumable', stats: { restore: 25 } },
     ingredients: [
       { name: 'Red Herb', count: 1 },
+      { name: 'Water Flask', count: 1 }
+    ]
+  },
+  {
+    id: 'elixir-vitality',
+    name: 'Elixir of Vitality',
+    description: 'A potent brew that knits wounds instantly.',
+    result: { name: 'Elixir of Vitality', description: 'Glowing golden liquid.', icon: '⚗️', type: 'consumable', stats: { restore: 60 } },
+    ingredients: [
+      { name: 'Red Herb', count: 3 },
+      { name: 'Magic Dust', count: 1 }
+    ]
+  },
+  {
+    id: 'antidote',
+    name: 'Antidote',
+    description: 'Cures poisons and toxins.',
+    result: { name: 'Antidote', description: 'A small vial of clear green liquid.', icon: '🍵', type: 'consumable', stats: { restore: 5 } },
+    ingredients: [
+      { name: 'Green Herb', count: 1 },
       { name: 'Water Flask', count: 1 }
     ]
   },
@@ -87,7 +138,7 @@ export const ART_STYLE = "Digital Fantasy Art, detailed, cinematic lighting, mas
 export const SYSTEM_INSTRUCTION = `
 You are an advanced Dungeon Master AI for a Choose-Your-Own-Adventure game. 
 Your goal is to generate an immersive story segment based on the user's actions.
-You MUST also manage the game state (Inventory, Quests, Health, Gold, Locations, Combat, Lore) logically.
+You MUST also manage the game state (Inventory, Quests, Health, Gold, Locations, Combat, Lore, Status Effects) logically.
 
 Rules:
 1. Story: Write compelling, descriptive narrative (approx 100-150 words). 
@@ -95,7 +146,7 @@ Rules:
 3. Image Prompt: Create a detailed visual description of the current scene. ALWAYS include the character's visual appearance.
 4. State Management: 
    - Handle inventory, quest, health, and gold updates as usual.
-   - Loot/Resources: Occasionally reward the player with crafting resources like "Iron Ore", "Leather Scraps", "Wood", "Red Herb", etc.
+   - Loot/Resources: Occasionally reward the player with crafting resources. Common: "Iron Ore", "Leather Scraps", "Wood", "Red Herb", "Cloth", "Water Flask". Rare: "Magic Dust", "Obsidian Shard", "Green Herb", "Crystal Shard".
    - EQUIPMENT: When generating new items, provide a 'type' ('weapon', 'armor', 'consumable', 'material', 'misc') and 'stats' (attack, defense) if applicable.
    - Map: Return 'newLocation' only for SIGNIFICANT new named places.
    - Lore: If the story introduces a SIGNIFICANT new specific character (NPC), faction, historical event, monster type, or magical concept, return it in 'newLore'.
@@ -103,14 +154,18 @@ Rules:
 5. COMBAT SYSTEM (CRITICAL):
    - STARTING COMBAT: If the narrative logically leads to a fight, return 'startCombat' with enemy details. Set 'soundEnvironment' to 'battle'.
    - DURING COMBAT: 
-     - TACTICAL ENEMY AI: The enemy must NOT just attack blindly. They should REACT to the player's specific action.
-       - If player Defends/Blocks: Enemy might attempt a heavy guard-break, use magic, or wait.
-       - If player Attacks: Enemy might dodge, parry, or counter-attack.
-       - SPECIAL ABILITIES: Give enemies specific named moves.
-     - Calculate damage to the Enemy based on the user's action, INVENTORY, and EQUIPPED ITEMS (Context will provide Total Attack/Defense).
-     - Calculate damage to the Player (return negative 'healthChange').
-     - Return 'combatUpdate' with 'newEnemyHealth', 'status', and 'enemyAction'.
-     - choices: MUST include combat actions like "Attack", "Defend", "Use [Item]", "Flee".
-
-Return the response strictly as a JSON object matching the Schema provided.
+     - TACTICAL ENEMY AI: The enemy must act STRATEGICALLY based on the player's state (see Context).
+       - IF PLAYER HEALTH IS LOW (< 30%): The enemy attempts to STUN 💫, FREEZE ❄️, or TRAP the player to prevent healing/escape.
+       - IF PLAYER DEFENSE IS HIGH (High Armor/Shield): The enemy uses MAGIC, PIERCING, or DAMAGE-OVER-TIME effects (Poison ☠️, Burn 🔥, Bleed 🩸) to bypass defense.
+       - IF PLAYER ATTACK IS HIGH: The enemy uses DEBUFFS (Blind 👁️‍🗨️, Weaken 📉) or EVASION tactics.
+       - REACTION: The enemy should also react to the player's specific last move (e.g., Guard Break if player Blocked).
+     - STATUS EFFECTS:
+       - Return new effects in 'newStatusEffects'.
+       - ALWAYS provide a clear emoji 'icon'.
+       - Set 'duration' between 1-3 turns usually.
+       - If the player ALREADY has active effects (check context), you MUST apply their consequences (e.g., "The poison burns your veins (-5 HP)") in the narrative and 'healthChange'.
+     - Calculate damage to the Enemy based on the user's action, INVENTORY, and EQUIPPED ITEMS.
+     - Calculate damage to the Player based on enemy strength vs Player Defense.
+     - Provide a 'combatUpdate' object with the new state.
+     - Describe the exchange vividly in the 'narrative'.
 `;

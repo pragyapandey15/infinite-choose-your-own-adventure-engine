@@ -33,6 +33,21 @@ export const generateStory = async (
   const totalAttack = mainHandAtk; // Can add base attack later
   const totalDefense = armorDef;
 
+  // Tactical Analysis for AI
+  let tacticalAnalysis = "Standard Engagement";
+  if (currentState.health < 40) {
+    tacticalAnalysis = "PLAYER CRITICAL: Vulnerable to Stun/Finisher";
+  } else if (totalDefense >= 4) {
+    tacticalAnalysis = "PLAYER ARMORED: Vulnerable to Magic/Poison/DoT (Bypass Defense)";
+  } else if (totalAttack >= 8) {
+    tacticalAnalysis = "PLAYER HIGH DAMAGE: Requires Debuffs (Blind/Weaken)";
+  }
+
+  // Active Effects Context
+  const effectsContext = currentState.activeEffects && currentState.activeEffects.length > 0
+    ? currentState.activeEffects.map(e => `${e.name} (${e.type}, ${e.duration} turns left): ${e.description}`).join(", ")
+    : "None";
+
   let combatContext = "None";
   if (currentState.combat && currentState.combat.isActive) {
     combatContext = `ACTIVE COMBAT vs ${currentState.combat.enemyName} (HP: ${currentState.combat.enemyHealth}/${currentState.combat.maxHealth})`;
@@ -49,6 +64,8 @@ export const generateStory = async (
     - TOTAL STATS: Attack: ${totalAttack}, Defense: ${totalDefense}
     - Health: ${currentState.health}
     - Gold: ${currentState.gold}
+    - TACTICAL ANALYSIS: ${tacticalAnalysis}
+    - ACTIVE STATUS EFFECTS: ${effectsContext} (Apply consequences of these in the narrative if applicable!)
     - Character: ${currentState.characterName} (${currentState.characterClass})
     - Appearance Description: ${currentState.appearance}
     - Known Locations: ${locationContext || "None yet"}
@@ -157,6 +174,26 @@ export const generateStory = async (
                 },
                 required: ["name", "category", "description"]
               }
+            },
+            newStatusEffects: {
+              type: Type.ARRAY,
+              description: "New status effects applied to the player.",
+              items: {
+                type: Type.OBJECT,
+                properties: {
+                  name: { type: Type.STRING },
+                  description: { type: Type.STRING },
+                  icon: { type: Type.STRING },
+                  duration: { type: Type.INTEGER },
+                  type: { type: Type.STRING, enum: ['buff', 'debuff'] }
+                },
+                required: ["name", "description", "icon", "duration", "type"]
+              }
+            },
+            removedStatusEffects: {
+              type: Type.ARRAY,
+              description: "Names of status effects that were cured or removed this turn.",
+              items: { type: Type.STRING }
             }
           },
           required: ["title", "narrative", "choices", "imagePrompt"]

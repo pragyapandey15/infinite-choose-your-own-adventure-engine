@@ -55,11 +55,20 @@ export interface CombatState {
   log: CombatLogEntry[];
 }
 
+export interface StatusEffect {
+  id?: string;
+  name: string;
+  description: string;
+  icon: string;
+  duration: number; // turns remaining
+  type: 'buff' | 'debuff';
+}
+
 export interface GameState {
   inventory: InventoryItem[];
-  equipment: Equipment; // New field
+  equipment: Equipment; 
   currentQuest: string;
-  history: string[]; // Summary of previous events for context
+  history: string[]; 
   turnCount: number;
   characterName: string;
   characterClass: string;
@@ -70,6 +79,7 @@ export interface GameState {
   currentLocationId: string;
   combat: CombatState | null;
   lore: LoreEntry[];
+  activeEffects: StatusEffect[]; // New field
 }
 
 export interface StorySegment {
@@ -104,6 +114,9 @@ export interface StorySegment {
   };
   // Lore updates
   newLore?: LoreEntry[];
+  // Status Effects
+  newStatusEffects?: StatusEffect[];
+  removedStatusEffects?: string[]; // names of effects to remove
 }
 
 export interface ChatMessage {
