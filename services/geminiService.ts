@@ -17,7 +17,7 @@ export const generateStory = async (
   currentState: GameState
 ): Promise<StorySegment> => {
   
-  const model = "gemini-3-pro-preview";
+  const model = "gemini-2.5-flash";
   
   // Create a summary of locations for context
   const locationContext = currentState.locations
@@ -284,8 +284,7 @@ export const chatWithGuide = async (
   currentNarrative: string
 ): Promise<string> => {
   try {
-    // Using Flash Lite for fast responses as requested
-    const model = "gemini-flash-lite-latest"; 
+    const model = "gemini-2.5-flash"; 
     
     const response = await ai.models.generateContent({
       model: model,

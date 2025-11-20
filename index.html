@@ -26,6 +26,10 @@
         },
       }
     </script>
+    <script>
+      // Polyfill process.env for browser environments to prevent crashes
+      window.process = window.process || { env: {} };
+    </script>
     <style>
       @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Merriweather:wght@300;400;700&display=swap');
       body {
