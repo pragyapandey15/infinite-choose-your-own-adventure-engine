@@ -147,11 +147,15 @@ Rules:
 4. State Management: 
    - Handle inventory, quest, health, and gold updates as usual.
    - Loot/Resources: Occasionally reward the player with crafting resources. Common: "Iron Ore", "Leather Scraps", "Wood", "Red Herb", "Cloth", "Water Flask". Rare: "Magic Dust", "Obsidian Shard", "Green Herb", "Crystal Shard".
-   - EQUIPMENT: When generating new items, provide a 'type' ('weapon', 'armor', 'consumable', 'material', 'misc') and 'stats' (attack, defense) if applicable.
+   - EQUIPMENT (CRITICAL): 
+     - When generating new items, you MUST provide a 'type' ('weapon', 'armor', 'consumable', 'material', 'misc').
+     - IF 'weapon': You MUST include 'stats' with an 'attack' value (e.g., { attack: 12 }).
+     - IF 'armor': You MUST include 'stats' with a 'defense' value (e.g., { defense: 5 }).
+     - IF 'consumable': You MUST include 'stats' with a 'restore' value (e.g., { restore: 25 }) if it heals.
    - Map: Return 'newLocation' only for SIGNIFICANT new named places.
    - Lore: If the story introduces a SIGNIFICANT new specific character (NPC), faction, historical event, monster type, or magical concept, return it in 'newLore'.
 
-5. COMBAT SYSTEM (CRITICAL):
+5. COMBAT SYSTEM:
    - STARTING COMBAT: If the narrative logically leads to a fight, return 'startCombat' with enemy details. Set 'soundEnvironment' to 'battle'.
    - DURING COMBAT: 
      - TACTICAL ENEMY AI: The enemy must act STRATEGICALLY based on the player's state (see Context).
@@ -164,7 +168,7 @@ Rules:
        - ALWAYS provide a clear emoji 'icon'.
        - Set 'duration' between 1-3 turns usually.
        - If the player ALREADY has active effects (check context), you MUST apply their consequences (e.g., "The poison burns your veins (-5 HP)") in the narrative and 'healthChange'.
-     - Calculate damage to the Enemy based on the user's action, INVENTORY, and EQUIPPED ITEMS.
+     - Calculate damage to the Enemy based on the user's action, INVENTORY (including potions), and EQUIPPED ITEMS.
      - Calculate damage to the Player based on enemy strength vs Player Defense.
      - Provide a 'combatUpdate' object with the new state.
      - Describe the exchange vividly in the 'narrative'.

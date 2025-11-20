@@ -56,10 +56,23 @@ export const generateStory = async (
     }
   }
 
+  // Format inventory with stats so AI knows what items do
+  const inventoryContext = currentState.inventory.map(i => {
+    let statsStr = "";
+    if (i.stats) {
+      const parts = [];
+      if (i.stats.attack) parts.push(`Atk: ${i.stats.attack}`);
+      if (i.stats.defense) parts.push(`Def: ${i.stats.defense}`);
+      if (i.stats.restore) parts.push(`Restore: ${i.stats.restore}`);
+      if (parts.length > 0) statsStr = ` [${parts.join(', ')}]`;
+    }
+    return `${i.name} (${i.type || 'misc'})${statsStr}`;
+  }).join(', ');
+
   const context = `
     Current Game State:
     - Quest: ${currentState.currentQuest}
-    - Inventory: ${currentState.inventory.map(i => i.name).join(', ')}
+    - Inventory: ${inventoryContext || "Empty"}
     - EQUIPPED GEAR: Main Hand: ${currentState.equipment?.mainHand?.name || "None"} (Atk: ${mainHandAtk}), Armor: ${currentState.equipment?.armor?.name || "None"} (Def: ${armorDef})
     - TOTAL STATS: Attack: ${totalAttack}, Defense: ${totalDefense}
     - Health: ${currentState.health}
@@ -123,7 +136,8 @@ export const generateStory = async (
                     },
                     nullable: true
                   }
-                }
+                },
+                required: ["name", "description", "icon", "type"]
               }
             },
             removedInventoryItems: { type: Type.ARRAY, items: { type: Type.STRING } },

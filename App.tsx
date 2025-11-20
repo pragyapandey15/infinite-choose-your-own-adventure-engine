@@ -12,7 +12,7 @@ import CharacterCreation from './components/CharacterCreation';
 import WorldMap from './components/WorldMap';
 import Encyclopedia from './components/Encyclopedia';
 import CraftingModal from './components/CraftingModal';
-import { Menu } from 'lucide-react';
+import { Menu, Book } from 'lucide-react';
 
 type GamePhase = 'creation' | 'playing';
 
@@ -47,6 +47,9 @@ const App: React.FC = () => {
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [isLoreOpen, setIsLoreOpen] = useState(false);
   const [isCraftingOpen, setIsCraftingOpen] = useState(false);
+  
+  // Notification State
+  const [notification, setNotification] = useState<string | null>(null);
 
   // Persistence Logic
   const saveGame = (
@@ -344,6 +347,9 @@ const App: React.FC = () => {
 
       // Lore Updates
       const currentLore = [...(gameState.lore || [])];
+      let addedLoreCount = 0;
+      let lastAddedLoreName = "";
+
       if (newSegment.newLore && newSegment.newLore.length > 0) {
         newSegment.newLore.forEach(item => {
           // Prevent duplicates based on name
@@ -353,8 +359,18 @@ const App: React.FC = () => {
               id: `lore-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
               unlockedAtTurn: gameState.turnCount + 1
             });
+            addedLoreCount++;
+            lastAddedLoreName = item.name;
           }
         });
+      }
+
+      if (addedLoreCount > 0) {
+        const msg = addedLoreCount === 1 
+           ? `New Lore Discovered: ${lastAddedLoreName}`
+           : `${addedLoreCount} New Lore Entries Discovered`;
+        setNotification(msg);
+        setTimeout(() => setNotification(null), 4000);
       }
 
       // STATUS EFFECTS MANAGEMENT
@@ -478,6 +494,16 @@ const App: React.FC = () => {
   return (
     <div className="h-screen w-full flex overflow-hidden bg-slate-950">
       
+      {/* Notification Toast */}
+      {notification && (
+        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[60] pointer-events-none animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="bg-slate-900/90 backdrop-blur-md border border-amber-500/50 text-amber-100 px-6 py-3 rounded-full shadow-2xl flex items-center gap-3">
+             <Book className="w-5 h-5 text-amber-500 animate-pulse" />
+             <span className="text-sm font-bold font-serif tracking-wide">{notification}</span>
+          </div>
+        </div>
+      )}
+
       {/* Mobile Sidebar Toggle */}
       <button 
         onClick={() => { audioManager.playClick(); setIsSidebarOpen(!isSidebarOpen); }}
