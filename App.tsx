@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { GameState, StorySegment, WorldLocation, LoreEntry, CombatLogEntry, CraftingRecipe, InventoryItem, Equipment } from './types';
+import { GameState, StorySegment, WorldLocation, LoreEntry, CombatLogEntry, CraftingRecipe, InventoryItem, Equipment, CombatState, StatusEffect } from './types';
 import { INITIAL_QUEST, CLASS_LOADOUTS } from './constants';
 import { generateStory, generateSceneImage } from './services/geminiService';
 import { audioManager } from './services/audioService';
@@ -12,6 +12,7 @@ import CharacterCreation from './components/CharacterCreation';
 import WorldMap from './components/WorldMap';
 import Encyclopedia from './components/Encyclopedia';
 import CraftingModal from './components/CraftingModal';
+import TutorialHint from './components/TutorialHint';
 import { Menu, Book } from 'lucide-react';
 
 type GamePhase = 'creation' | 'playing';
@@ -37,7 +38,8 @@ const App: React.FC = () => {
     currentLocationId: 'start',
     combat: null,
     lore: [],
-    activeEffects: []
+    activeEffects: [],
+    seenTutorials: []
   });
 
   const [currentSegment, setCurrentSegment] = useState<StorySegment | null>(null);
@@ -48,8 +50,9 @@ const App: React.FC = () => {
   const [isLoreOpen, setIsLoreOpen] = useState(false);
   const [isCraftingOpen, setIsCraftingOpen] = useState(false);
   
-  // Notification State
+  // Notification & Tutorial State
   const [notification, setNotification] = useState<string | null>(null);
+  const [activeTutorial, setActiveTutorial] = useState<string | null>(null);
 
   // Persistence Logic
   const saveGame = (
@@ -86,6 +89,7 @@ const App: React.FC = () => {
         if (!loadedState.lore) loadedState.lore = [];
         if (!loadedState.equipment) loadedState.equipment = { mainHand: null, armor: null };
         if (!loadedState.activeEffects) loadedState.activeEffects = [];
+        if (!loadedState.seenTutorials) loadedState.seenTutorials = [];
         
         setGameState(loadedState);
         setCurrentSegment(data.currentSegment);
@@ -143,7 +147,8 @@ const App: React.FC = () => {
       currentLocationId: initialLocation.id,
       combat: null,
       lore: [],
-      activeEffects: []
+      activeEffects: [],
+      seenTutorials: []
     };
 
     setGameState(initialState);
@@ -264,6 +269,14 @@ const App: React.FC = () => {
      });
   };
 
+  const triggerTutorial = (tutorialId: string, currentSeen: string[]): string[] => {
+    if (!currentSeen.includes(tutorialId)) {
+      setActiveTutorial(tutorialId);
+      return [...currentSeen, tutorialId];
+    }
+    return currentSeen;
+  };
+
   // Action Handler
   const handleAction = async (action: string) => {
     if (!currentSegment || isLoading) return;
@@ -276,6 +289,7 @@ const App: React.FC = () => {
     if (isMapOpen) setIsMapOpen(false); // Close map if traveling
     if (isLoreOpen) setIsLoreOpen(false);
     if (isCraftingOpen) setIsCraftingOpen(false);
+    setActiveTutorial(null); // Clear existing tutorial if any to prevent stack
 
     try {
       // Update history buffer
@@ -377,32 +391,43 @@ const App: React.FC = () => {
       let currentEffects = [...(gameState.activeEffects || [])];
       
       // 1. Decrement duration of existing effects (since they 'ticked' in the AI generation)
-      currentEffects = currentEffects.map(e => ({...e, duration: e.duration - 1})).filter(e => e.duration > 0);
+      currentEffects = currentEffects.map(e => ({
+        ...e,
+        duration: e.duration - 1
+      })).filter(e => e.duration > 0);
 
-      // 2. Remove specific effects if cured
+      // 2. Remove effects explicitly cured/removed by AI
       if (newSegment.removedStatusEffects) {
         const toRemove = new Set(newSegment.removedStatusEffects.map(n => n.toLowerCase()));
         currentEffects = currentEffects.filter(e => !toRemove.has(e.name.toLowerCase()));
       }
 
       // 3. Add new effects
+      let addedEffect = false;
       if (newSegment.newStatusEffects) {
-         newSegment.newStatusEffects.forEach(effect => {
-            // If effect exists, refresh/overwrite it
-            const existingIdx = currentEffects.findIndex(e => e.name.toLowerCase() === effect.name.toLowerCase());
-            if (existingIdx >= 0) {
-               currentEffects[existingIdx] = { ...effect, id: currentEffects[existingIdx].id || `effect-${Date.now()}` };
-            } else {
-               currentEffects.push({ ...effect, id: `effect-${Date.now()}-${Math.random()}` });
-            }
-         });
+        newSegment.newStatusEffects.forEach(effect => {
+           // Check if already exists to update duration instead of duplicate
+           const idx = currentEffects.findIndex(e => e.name === effect.name);
+           if (idx !== -1) {
+             currentEffects[idx] = effect;
+           } else {
+             currentEffects.push({ ...effect, id: `eff-${Date.now()}` });
+             addedEffect = true;
+           }
+        });
+      }
+
+      // Tutorial Triggers based on state
+      let updatedSeenTutorials = [...gameState.seenTutorials];
+      if (addedEffect) {
+        updatedSeenTutorials = triggerTutorial('status_effects', updatedSeenTutorials);
       }
 
       // COMBAT LOGIC
-      let currentCombat = gameState.combat;
+      let currentCombat = gameState.combat ? { ...gameState.combat } : null;
       let combatEnded = false;
 
-      // Start Combat?
+      // Start Combat
       if (newSegment.startCombat) {
         currentCombat = {
           isActive: true,
@@ -410,42 +435,62 @@ const App: React.FC = () => {
           enemyHealth: newSegment.startCombat.health,
           maxHealth: newSegment.startCombat.health,
           description: newSegment.startCombat.description,
-          lastAction: "Enters the fray!",
-          log: [{ turn: gameState.turnCount + 1, text: `Encounter started vs ${newSegment.startCombat.enemyName}`, type: 'info' }]
+          lastAction: undefined,
+          log: [{ turn: gameState.turnCount + 1, text: `Encountered ${newSegment.startCombat.enemyName}!`, type: 'info' }]
         };
-        // Force battle music if not already set by AI
-        if (!newSegment.soundEnvironment) audioManager.setAmbience('battle');
+        updatedSeenTutorials = triggerTutorial('combat_basics', updatedSeenTutorials);
       } 
-      // Update Combat?
-      else if (newSegment.combatUpdate && currentCombat && currentCombat.isActive) {
-        // Calculate estimated damage for logs
-        const enemyDamage = Math.max(0, currentCombat.enemyHealth - newSegment.combatUpdate.newEnemyHealth);
-        const playerDamage = newSegment.healthChange || 0;
+      // Update Combat
+      else if (currentCombat && currentCombat.isActive && newSegment.combatUpdate) {
         
-        const newLogs: CombatLogEntry[] = [
-          ...(currentCombat.log || []),
-          { turn: gameState.turnCount + 1, text: `> ${action}`, type: 'player' },
-          { turn: gameState.turnCount + 1, text: `${newSegment.combatUpdate.enemyAction || 'Acts...'}`, type: 'enemy' }
-        ];
+        // Log Player Action
+        currentCombat.log.push({
+          turn: gameState.turnCount,
+          text: `You: ${action}`,
+          type: 'player'
+        });
 
-        if (enemyDamage > 0) {
-           newLogs.push({ turn: gameState.turnCount + 1, text: `${currentCombat.enemyName} took ${enemyDamage} damage.`, type: 'damage' });
-        }
-        if (playerDamage < 0) {
-           newLogs.push({ turn: gameState.turnCount + 1, text: `You took ${Math.abs(playerDamage)} damage.`, type: 'damage' });
+        // Log Damage Dealt to Enemy
+        const dmgToEnemy = currentCombat.enemyHealth - newSegment.combatUpdate.newEnemyHealth;
+        if (dmgToEnemy > 0) {
+          currentCombat.log.push({
+            turn: gameState.turnCount,
+            text: `Hit ${currentCombat.enemyName} for ${dmgToEnemy} damage`,
+            type: 'damage'
+          });
         }
 
-        if (newSegment.combatUpdate.status === 'ongoing') {
-          currentCombat = {
-            ...currentCombat,
-            enemyHealth: newSegment.combatUpdate.newEnemyHealth,
-            lastAction: newSegment.combatUpdate.enemyAction || "Attacks!",
-            log: newLogs
-          };
-        } else {
-          // Victory, Defeat, or Fled - End Combat
-          currentCombat = null;
+        // Log Enemy Action
+        if (newSegment.combatUpdate.enemyAction) {
+           currentCombat.lastAction = newSegment.combatUpdate.enemyAction;
+           currentCombat.log.push({
+             turn: gameState.turnCount,
+             text: `${currentCombat.enemyName}: ${newSegment.combatUpdate.enemyAction}`,
+             type: 'enemy'
+           });
+           updatedSeenTutorials = triggerTutorial('enemy_tactics', updatedSeenTutorials);
+        }
+
+        // Log Player Damage Taken
+        if (newSegment.healthChange && newSegment.healthChange < 0) {
+           currentCombat.log.push({
+             turn: gameState.turnCount,
+             text: `You took ${Math.abs(newSegment.healthChange)} damage`,
+             type: 'damage'
+           });
+        }
+
+        // Update State
+        currentCombat.enemyHealth = newSegment.combatUpdate.newEnemyHealth;
+        
+        // Check status
+        if (newSegment.combatUpdate.status !== 'ongoing') {
+          currentCombat.isActive = false;
+          currentCombat.description = `Combat ended: ${newSegment.combatUpdate.status}`;
+          currentCombat.log.push({ turn: gameState.turnCount, text: `Victory!`, type: 'info' });
           combatEnded = true;
+          // Revert audio
+          audioManager.setAmbience('nature'); // or based on location
         }
       }
 
@@ -461,99 +506,74 @@ const App: React.FC = () => {
         currentLocationId: newLocationId,
         combat: currentCombat,
         lore: currentLore,
-        activeEffects: currentEffects
+        activeEffects: currentEffects,
+        seenTutorials: updatedSeenTutorials
       };
 
       setGameState(nextGameState);
       setCurrentSegment(newSegment);
 
-      // Auto-save on combat completion
+      // Auto-save on Combat End
       if (combatEnded) {
-        saveGame(nextGameState, newSegment, null);
+        // We pass overrides because state updates are async and we want to save THIS moment
+        saveGame(nextGameState, newSegment, null); 
       }
 
-      // 3. Generate Image
-      const imageUrl = await generateSceneImage(newSegment.imagePrompt);
-      setCurrentImage(imageUrl);
+      // 3. Generate Image in background
+      generateSceneImage(newSegment.imagePrompt).then(url => {
+        if (url) setCurrentImage(url);
+      });
 
     } catch (error) {
-      console.error("Turn error:", error);
+      console.error("Failed to take action:", error);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleTravel = (locationName: string) => {
-    handleAction(`Travel to ${locationName}`);
-  };
-
   if (gamePhase === 'creation') {
-    return <CharacterCreation onCreate={handleCharacterCreate} onLoad={loadGame} />;
+    return <CharacterCreation onCreate={handleCharacterCreate} onLoad={() => { if(loadGame()) return true; return false; }} />;
   }
 
   return (
-    <div className="h-screen w-full flex overflow-hidden bg-slate-950">
-      
+    <div className="flex h-screen bg-slate-950 overflow-hidden text-slate-100 font-sans">
       {/* Notification Toast */}
       {notification && (
-        <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[60] pointer-events-none animate-in fade-in slide-in-from-top-2 duration-300">
-          <div className="bg-slate-900/90 backdrop-blur-md border border-amber-500/50 text-amber-100 px-6 py-3 rounded-full shadow-2xl flex items-center gap-3">
-             <Book className="w-5 h-5 text-amber-500 animate-pulse" />
-             <span className="text-sm font-bold font-serif tracking-wide">{notification}</span>
-          </div>
-        </div>
+         <div className="fixed top-6 left-1/2 -translate-x-1/2 z-[100] animate-in fade-in slide-in-from-top-4 duration-500">
+           <div className="bg-amber-500/90 text-black font-bold px-6 py-3 rounded-full shadow-[0_0_20px_rgba(245,158,11,0.5)] flex items-center gap-2">
+             <Book className="w-5 h-5" />
+             {notification}
+           </div>
+         </div>
+      )}
+
+      {/* Active Tutorial Hint */}
+      {activeTutorial && (
+        <TutorialHint 
+          tutorialId={activeTutorial} 
+          onDismiss={() => setActiveTutorial(null)} 
+        />
       )}
 
       {/* Mobile Sidebar Toggle */}
-      <button 
-        onClick={() => { audioManager.playClick(); setIsSidebarOpen(!isSidebarOpen); }}
-        className="md:hidden fixed top-4 right-4 z-50 p-2 bg-slate-800 rounded-lg border border-slate-700 text-slate-200"
-      >
-        <Menu className="w-6 h-6" />
-      </button>
-
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col h-full relative overflow-hidden">
-        {/* Scrollable Story Area */}
-        <div className="flex-1 overflow-y-auto scroll-smooth">
-          <div className="min-h-full flex flex-col pt-8 pb-24 md:pt-12">
-            {currentSegment && (
-              <StoryCard 
-                title={currentSegment.title}
-                narrative={currentSegment.narrative}
-                imageUrl={currentImage}
-                isLoading={isLoading && !currentImage}
-                combatState={gameState.combat}
-              />
-            )}
-            
-            {/* Loading State Indicator for Text */}
-            {isLoading && !currentSegment && (
-               <div className="flex items-center justify-center h-64">
-                 <div className="text-indigo-500 animate-pulse">Initializing World...</div>
-               </div>
-            )}
-          </div>
-        </div>
-
-        {/* Fixed Action Area */}
-        <ActionArea 
-          choices={currentSegment?.choices || []} 
-          onAction={handleAction}
-          isLoading={isLoading}
-        />
+      <div className="fixed top-4 left-4 z-30 md:hidden">
+        <button 
+          onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+          className="p-3 bg-slate-900 rounded-full border border-slate-700 shadow-lg text-indigo-400"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
       </div>
 
-      {/* Right Sidebar (Desktop: Fixed, Mobile: Drawer) */}
+      {/* Sidebar */}
       <div className={`
-        fixed inset-y-0 right-0 transform transition-transform duration-300 ease-in-out z-30
-        md:relative md:transform-none md:translate-x-0
-        ${isSidebarOpen ? 'translate-x-0' : 'translate-x-full'}
+        fixed inset-y-0 left-0 z-40 transform transition-transform duration-300 ease-in-out md:relative md:translate-x-0
+        ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <Sidebar 
           gameState={gameState} 
           onSave={() => saveGame()} 
-          onLoad={loadGame} 
+          onLoad={loadGame}
           onToggleMap={() => setIsMapOpen(true)}
           onToggleLore={() => setIsLoreOpen(true)}
           onToggleCrafting={() => setIsCraftingOpen(true)}
@@ -562,43 +582,56 @@ const App: React.FC = () => {
         />
       </div>
 
-      {/* Mobile Backdrop */}
-      {isSidebarOpen && (
-        <div 
-          className="fixed inset-0 bg-black/50 z-20 md:hidden"
-          onClick={() => setIsSidebarOpen(false)}
-        />
-      )}
+      {/* Main Content */}
+      <div className="flex-1 flex flex-col relative h-full overflow-hidden" onClick={() => isSidebarOpen && setIsSidebarOpen(false)}>
+        
+        {/* Scrollable Story Area */}
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-32 scroll-smooth">
+          {currentSegment && (
+            <StoryCard 
+              title={currentSegment.title}
+              narrative={currentSegment.narrative}
+              imageUrl={currentImage}
+              isLoading={isLoading}
+              combatState={gameState.combat}
+            />
+          )}
+        </div>
 
-      {/* Map Modal */}
-      {isMapOpen && (
-        <WorldMap 
-          gameState={gameState} 
-          onClose={() => setIsMapOpen(false)} 
-          onTravel={handleTravel}
-        />
-      )}
+        {/* Fixed Action Area */}
+        {currentSegment && (
+          <ActionArea 
+            choices={currentSegment.choices} 
+            onAction={handleAction} 
+            isLoading={isLoading}
+          />
+        )}
 
-      {/* Lore Encyclopedia Modal */}
-      {isLoreOpen && (
-        <Encyclopedia 
-          gameState={gameState} 
-          onClose={() => setIsLoreOpen(false)} 
-        />
-      )}
-
-      {/* Crafting Modal */}
-      {isCraftingOpen && (
-        <CraftingModal 
-          gameState={gameState}
-          onClose={() => setIsCraftingOpen(false)}
-          onCraft={handleCraft}
-        />
-      )}
-
-      {/* AI Chat Widget */}
-      <ChatWidget currentNarrative={currentSegment?.narrative || ""} />
-
+        {/* Floating Chat Widget */}
+        <ChatWidget currentNarrative={currentSegment?.narrative || ''} />
+        
+        {/* Modals */}
+        {isMapOpen && (
+          <WorldMap 
+            gameState={gameState} 
+            onClose={() => setIsMapOpen(false)} 
+            onTravel={(locName) => handleAction(`Travel to ${locName}`)} 
+          />
+        )}
+        {isLoreOpen && (
+          <Encyclopedia 
+             gameState={gameState} 
+             onClose={() => setIsLoreOpen(false)} 
+          />
+        )}
+        {isCraftingOpen && (
+          <CraftingModal 
+            gameState={gameState}
+            onClose={() => setIsCraftingOpen(false)}
+            onCraft={handleCraft}
+          />
+        )}
+      </div>
     </div>
   );
 };

@@ -135,6 +135,21 @@ export const INITIAL_QUEST = "Find your way to the nearest settlement.";
 
 export const ART_STYLE = "Digital Fantasy Art, detailed, cinematic lighting, masterpiece, 8k resolution, consistent character design, atmospheric";
 
+export const TUTORIAL_CONTENT: Record<string, { title: string; message: string }> = {
+  'combat_basics': {
+    title: "⚔️ Combat Initiated",
+    message: "You have entered battle! Monitor your Health closely. You can Attack, Defend, or use Items like potions from your Inventory."
+  },
+  'status_effects': {
+    title: "⚡ Status Effects",
+    message: "You are affected by a Status Condition! Check the Sidebar to see active buffs or debuffs and how long they will last."
+  },
+  'enemy_tactics': {
+    title: "🧠 Enemy Tactics",
+    message: "Enemies are smart! They may attempt to Stun you if you are low on health or use Magic to bypass your armor. Watch the Battle Log for details."
+  }
+};
+
 export const SYSTEM_INSTRUCTION = `
 You are an advanced Dungeon Master AI for a Choose-Your-Own-Adventure game. 
 Your goal is to generate an immersive story segment based on the user's actions.

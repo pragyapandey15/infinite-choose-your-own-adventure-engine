@@ -79,7 +79,8 @@ export interface GameState {
   currentLocationId: string;
   combat: CombatState | null;
   lore: LoreEntry[];
-  activeEffects: StatusEffect[]; // New field
+  activeEffects: StatusEffect[]; 
+  seenTutorials: string[]; // Track seen tutorial IDs
 }
 
 export interface StorySegment {

@@ -194,6 +194,29 @@ class AudioService {
     noise.start();
   }
 
+  public playHint() {
+    if (this.isMuted || !this.context) return;
+    const now = this.context.currentTime;
+    
+    const osc = this.context.createOscillator();
+    const gain = this.context.createGain();
+    
+    osc.connect(gain);
+    gain.connect(this.masterGain!);
+    
+    // Gentle bell-like chime
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(1200, now);
+    osc.frequency.exponentialRampToValueAtTime(1800, now + 0.1);
+    
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.1, now + 0.1);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+    
+    osc.start(now);
+    osc.stop(now + 1.5);
+  }
+
   // Ambient Drones
   public setAmbience(type: 'nature' | 'dungeon' | 'city' | 'battle' | 'mystic' | 'none') {
     if (this.currentAmbienceType === type || !this.context) return;
